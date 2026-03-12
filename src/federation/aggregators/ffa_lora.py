@@ -1,0 +1,82 @@
+"""
+FFA-LoRA Aggregator: Freeze A, Aggregate Only B
+
+From Sun et al., ICLR 2024.
+Key insight: Freezing A reduces gradient coupling and halves communication.
+
+CURSOR AI: Implement this file as specified.
+"""
+
+from typing import Dict, List, Optional
+
+import torch
+
+
+class FFALoRAAggregator:
+    """
+    FFA-LoRA: Freeze A matrices, only aggregate B.
+
+    - A matrices frozen from initialization
+    - Only B matrices are trained and aggregated
+    - 50% communication reduction
+    """
+
+    def __init__(self):
+        self.name = "FFA-LoRA"
+        self.frozen_a = None
+        self.initialized = False
+
+    def aggregate(
+        self,
+        client_states: List[Dict[str, torch.Tensor]],
+        weights: Optional[List[float]] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Aggregate: freeze A, average B.
+        """
+        if not client_states:
+            raise ValueError("No client states")
+
+        # Initialize frozen A on first call
+        if not self.initialized:
+            self.frozen_a = {}
+            for name, param in client_states[0].items():
+                if "lora_A" in name or "lora_a" in name:
+                    self.frozen_a[name] = param.clone()
+            self.initialized = True
+
+        # Default weights
+        if weights is None:
+            weights = [1.0 / len(client_states)] * len(client_states)
+        total = sum(weights)
+        weights = [w / total for w in weights]
+
+        # Aggregate
+        aggregated = {}
+        for name in client_states[0].keys():
+            if "lora_A" in name or "lora_a" in name:
+                # Use frozen A
+                aggregated[name] = self.frozen_a[name].clone()
+            else:
+                # Average B (and any other params)
+                weighted_sum = sum(
+                    w * state[name].float()
+                    for w, state in zip(weights, client_states)
+                )
+                aggregated[name] = weighted_sum.to(client_states[0][name].dtype)
+
+        return aggregated
+
+    def get_communication_cost(self, state: Dict[str, torch.Tensor]) -> int:
+        """Bytes for one client (only B matrices after init)."""
+        b_params = sum(
+            p.numel()
+            for name, p in state.items()
+            if "lora_B" in name or "lora_b" in name
+        )
+        return b_params * 2 * 2  # float16 * 2 (upload + download)
+
+    def reset(self):
+        """Reset for new experiment."""
+        self.frozen_a = None
+        self.initialized = False
