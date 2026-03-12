@@ -1,0 +1,54 @@
+# =============================================================================
+# BASE CONFIGURATION
+# All experiment configs inherit from this and can override specific values
+# =============================================================================
+
+# Model Configuration
+model:
+  name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"  # Primary model for experiments
+  # Alternative: "meta-llama/Llama-3.2-3B" for larger experiments
+  torch_dtype: "float16"
+  device: "mps"  # Apple Silicon GPU
+
+# LoRA Configuration
+lora:
+  r: 16                          # Rank of LoRA matrices
+  lora_alpha: 32                 # Scaling factor
+  lora_dropout: 0.1              # Dropout probability
+  target_modules:                # Attention layers to adapt
+    - "q_proj"
+    - "v_proj"
+  bias: "none"
+
+# Local Training Configuration (per client per round)
+training:
+  local_epochs: 2                # How many epochs each client trains
+  batch_size: 4                  # Samples per batch
+  gradient_accumulation_steps: 4 # Effective batch = 4 * 4 = 16
+  learning_rate: 0.0002          # 2e-4
+  weight_decay: 0.01
+  max_seq_length: 512
+  warmup_ratio: 0.03
+
+# Federated Learning Configuration
+federated:
+  num_rounds: 30                 # Total communication rounds
+  num_clients: 10                # Number of simulated clients
+  clients_per_round: 10          # Full participation
+  aggregation_method: "fedit"    # Will be overridden per run
+
+# Evaluation Configuration
+evaluation:
+  eval_every: 5                  # Evaluate every N rounds
+  eval_batch_size: 8
+  metrics:
+    - "loss"
+    - "perplexity"
+
+# Checkpointing
+checkpointing:
+  save_every: 10                 # Save checkpoint every N rounds
+  keep_last_n: 3                 # Keep last N checkpoints
+
+# Reproducibility
+seed: 42
